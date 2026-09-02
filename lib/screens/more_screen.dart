@@ -6,6 +6,7 @@ import 'developer_report_screen.dart';
 import 'devices_screen.dart';
 import 'notifications_screen.dart';
 import 'radar_screen.dart';
+import 'remote_access_screen.dart';
 import 'settings_screen.dart';
 
 class MoreScreen extends StatelessWidget {
@@ -20,10 +21,23 @@ class MoreScreen extends StatelessWidget {
   Widget build(BuildContext context) => ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          const Text('More', style: TextStyle(fontSize: 26, fontWeight: FontWeight.w900)),
-          const SizedBox(height: 4),
-          const Text('RadarAI, remote controls, developer reporting, devices, and settings.', style: TextStyle(color: MechTheme.subtle)),
+          Row(children: [
+            const Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('More', style: TextStyle(fontSize: 26, fontWeight: FontWeight.w900)),
+              SizedBox(height: 4),
+              Text('Remote access, RadarAI, controls, developer reporting, devices, and settings.', style: TextStyle(color: MechTheme.subtle)),
+            ])),
+            _RouteBadge(state: state),
+          ]),
           const SizedBox(height: 16),
+          _ToolTile(
+            icon: Icons.vpn_lock_outlined,
+            title: 'Remote Access',
+            subtitle: state.remoteConfigured
+                ? 'Automatic Local / Remote failover is configured'
+                : 'Set up private away-from-home access',
+            onTap: () => _open(context, RemoteAccessScreen(state: state)),
+          ),
           _ToolTile(
             icon: Icons.notifications_active_outlined,
             title: 'Notifications & Hardware Alerts',
@@ -62,6 +76,30 @@ class MoreScreen extends StatelessWidget {
           ),
         ],
       );
+}
+
+class _RouteBadge extends StatelessWidget {
+  const _RouteBadge({required this.state});
+  final AppState state;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = state.connectionRoute == ConnectionRoute.remote
+        ? MechTheme.success
+        : state.connectionRoute == ConnectionRoute.local
+            ? MechTheme.primary
+            : state.connectionRoute == ConnectionRoute.offline
+                ? MechTheme.danger
+                : MechTheme.warning;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        border: Border.all(color: color),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(state.connectionRouteLabel, style: TextStyle(color: color, fontWeight: FontWeight.w900)),
+    );
+  }
 }
 
 class _ToolTile extends StatelessWidget {
