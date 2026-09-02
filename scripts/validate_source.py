@@ -27,7 +27,7 @@ ast.parse((root / 'scripts/apply_platform_patches.py').read_text())
 pubspec = (root / 'pubspec.yaml').read_text()
 for dep in [
     'http: ^1.6.0',
-    'flutter_secure_storage: ^11.0.0',
+    'flutter_secure_storage: ^10.2.0',
     'shared_preferences: ^2.5.5',
     'path_provider: ^2.1.5',
     'share_plus: ^13.3.0',
