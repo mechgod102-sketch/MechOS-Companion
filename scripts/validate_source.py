@@ -10,6 +10,7 @@ required = [
     'lib/models/optimization_report.dart',
     'lib/models/companion_features.dart',
     'lib/services/api_client.dart',
+    'lib/services/secure_store.dart',
     'lib/services/report_image_service.dart',
     'lib/services/report_share_service.dart',
     'lib/services/developer_bundle_service.dart',
@@ -19,9 +20,13 @@ required = [
     'lib/screens/notifications_screen.dart',
     'lib/screens/devices_screen.dart',
     'lib/screens/developer_report_screen.dart',
+    'lib/screens/remote_access_screen.dart',
     'lib/screens/more_screen.dart',
     'mechos_bridge/server.py',
     'mechos_bridge/server_v012.py',
+    'mechos_bridge/push_dispatcher.py',
+    'mechos_bridge/mechos-companion-push.service',
+    'docs/REMOTE_ACCESS.md',
     'scripts/bootstrap-platforms.sh',
     'scripts/apply_platform_patches.py',
     'test/optimization_report_test.dart',
@@ -31,12 +36,16 @@ missing = [p for p in required if not (root / p).exists()]
 if missing:
     raise SystemExit('Missing: ' + ', '.join(missing))
 
-ast.parse((root / 'mechos_bridge/server.py').read_text())
-ast.parse((root / 'mechos_bridge/server_v012.py').read_text())
-ast.parse((root / 'scripts/apply_platform_patches.py').read_text())
+for path in [
+    'mechos_bridge/server.py',
+    'mechos_bridge/server_v012.py',
+    'mechos_bridge/push_dispatcher.py',
+    'scripts/apply_platform_patches.py',
+]:
+    ast.parse((root / path).read_text())
 
 pubspec = (root / 'pubspec.yaml').read_text()
-assert 'version: 0.1.2+3' in pubspec
+assert 'version: 0.1.3+4' in pubspec
 for dep in [
     'http: ^1.6.0',
     'flutter_secure_storage: ^10.2.0',
@@ -67,6 +76,33 @@ assert 'compatibility_catalog' in feature_bridge
 assert 'developer_bug_report' in feature_bridge
 assert 'ThreadingHTTPServer' in feature_bridge
 
+app_state = (root / 'lib/app_state.dart').read_text()
+for marker in [
+    'ConnectionRoute.local',
+    'ConnectionRoute.remote',
+    'ConnectionRoute.offline',
+    'saveRemoteUrl',
+    '_resolveEndpoint',
+    '100 && b >= 64 && b <= 127',
+]:
+    assert marker in app_state, marker
+
+secure_store = (root / 'lib/services/secure_store.dart').read_text()
+assert 'bridge_remote_url' in secure_store
+assert 'remoteUrl' in secure_store
+
+api_client = (root / 'lib/services/api_client.dart').read_text()
+assert "health({int timeout = 3})" in api_client
+
+remote_screen = (root / 'lib/screens/remote_access_screen.dart').read_text()
+for marker in ['Remote Access', 'Tailscale', 'WireGuard', 'No router port forwarding']:
+    assert marker in remote_screen, marker
+
+push_dispatcher = (root / 'mechos_bridge/push_dispatcher.py').read_text()
+for marker in ['mechos-push-relay', 'subprocess.run', 'COOLDOWN_SECONDS', '_hardware_events', '_radar_events']:
+    assert marker in push_dispatcher, marker
+assert 'shell=True' not in push_dispatcher
+
 image_service = (root / 'lib/services/report_image_service.dart').read_text()
 assert '1080, 1920' in image_service
 assert '1080, 1350' in image_service
@@ -95,4 +131,8 @@ assert 'arbitrary' in api_doc
 assert '/v1/optimization/report' in api_doc
 assert '/v1/developer/bug-report' in api_doc
 
-print('MechOS Companion Mobile 0.1.2 source validation: PASS')
+remote_doc = (root / 'docs/REMOTE_ACCESS.md').read_text()
+assert 'Do **not** router-port-forward TCP 47831' in remote_doc
+assert 'mechos-push-relay' in remote_doc
+
+print('MechOS Companion Mobile 0.1.3 source validation: PASS')
