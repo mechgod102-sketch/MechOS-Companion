@@ -7,9 +7,10 @@ if ! command -v sudo >/dev/null 2>&1; then
 fi
 
 sudo install -Dm755 mechos_bridge/server.py /usr/lib/mechos-companion-bridge/server.py
+sudo install -Dm755 mechos_bridge/server_v012.py /usr/lib/mechos-companion-bridge/server_v012.py
 sudo install -Dm644 mechos_bridge/mechos-companion-bridge.service /usr/lib/systemd/user/mechos-companion-bridge.service
 systemctl --user daemon-reload
 systemctl --user enable --now mechos-companion-bridge.service
 
-echo "MechOS Companion Bridge 0.1.1 installed for the current user."
+echo "MechOS Companion Bridge 0.1.2 installed for the current user."
 echo "View the pairing code with: journalctl --user -u mechos-companion-bridge -n 30"
