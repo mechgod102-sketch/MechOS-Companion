@@ -1,12 +1,41 @@
-# MechOS Companion Mobile 0.1.2
+# MechOS Companion Mobile 0.1.3
 
-Flutter source for the Android + iPhone MechOS Companion app.
+Flutter companion app for Android and iPhone, paired with a MechOS PC or Steam Deck through the authenticated MechOS Companion Bridge.
 
-## New in v0.1.2
+## v0.1.3 — Away-from-home Remote Access
+
+The Companion can now keep working when the phone is away from the MechOS machine's home Wi-Fi.
+
+- Save a normal **Local** Bridge address and an optional **Remote private** address.
+- Recommended remote transport: **Tailscale or WireGuard**.
+- The app probes the current route, prefers Local, and automatically falls back to Remote.
+- Home and More show **Local / Remote / Offline / Demo** connection state.
+- Remote HTTP is accepted only for private address ranges, the Tailscale `100.64.0.0/10` range, loopback/private LAN ranges, or `.ts.net` names.
+- Other remote hostnames must use HTTPS.
+- **Do not router-port-forward TCP 47831.**
+
+See `docs/REMOTE_ACCESS.md` for the complete setup and security design.
+
+## Background alert plumbing
+
+MechOS now includes `mechos_bridge/push_dispatcher.py` and the `mechos-companion-push.service` user service.
+
+The dispatcher:
+
+- checks severe hardware conditions;
+- watches RadarAI warning/critical alerts;
+- de-duplicates alerts with a cooldown;
+- forwards JSON events to a fixed provider helper named `mechos-push-relay`;
+- never executes alert text through a shell;
+- contains no APNs/FCM credentials.
+
+A production APNs/FCM relay and mobile device push registration still require provider credentials outside the public repository. Until those are configured, the live alert center continues to work over Local or Remote Access while the app is open.
+
+## v0.1.2 feature set
 
 ### Live Performance
 
-The **Live** tab polls the authenticated MechOS Bridge and builds mobile graphs for:
+The **Live** tab polls the authenticated Bridge and graphs:
 
 - CPU utilization
 - GPU utilization when exposed by the driver
@@ -15,94 +44,118 @@ The **Live** tab polls the authenticated MechOS Bridge and builds mobile graphs 
 - Linux sensor temperature when available
 - MechOS update/download progress
 
-No metric is guessed when a sensor is missing.
+Missing sensors are shown as unavailable rather than guessed.
 
 ### Game Compatibility
 
-The **Games** tab searches and displays the compatibility catalog supplied by the paired MechOS system. The bridge reads MechOS compatibility JSON files or the fixed `mechos-game-compat --list --json` helper when available.
+The **Games** tab searches compatibility information supplied by the paired MechOS system.
 
 ### Hardware + RadarAI Notifications
 
-The companion now has a notification center for high temperature, high storage usage, severe memory pressure, and RadarAI alerts. The feed refreshes while the app is active. The bridge contract is provider-neutral so APNs/FCM background delivery can be added later without changing the hardware-alert API.
+The notification center shows high temperature, storage pressure, severe memory pressure, and RadarAI alerts.
 
-### Paired Device Management
+### Developer Bug Reports
 
-The **Paired Mobile Devices** page shows the phones and tablets paired with the current MechOS Bridge, including which entry represents the current phone. Pairing credentials are never displayed. v0.1.2 keeps cross-device removal disabled; the current phone can disconnect itself from Settings.
-
-### Developer Bug Report Bundle
-
-The **Developer Bug Report** tool creates a shareable package for your developer Discord or GitHub workflow:
+The Developer Bug Report workflow can package:
 
 - Discord-ready 1080×1350 optimization PNG
-- structured JSON diagnostic report
-- GitHub-ready Markdown issue file
+- structured JSON diagnostics
+- GitHub-ready Markdown
 - optimization score and findings
 - current hardware metrics
 - RadarAI warnings
 - update/session state
-- bounded recent log excerpts for the Companion Bridge, RadarAI, and MechOS updater
+- bounded recent Bridge/RadarAI/updater log excerpts
 
-The phone opens the normal system share sheet so you choose Discord, GitHub, Files, email, or another installed destination.
+The phone uses the normal system share sheet so you choose the destination.
 
-## Optimization Reports from v0.1.1
+### Paired Mobile Devices
 
-The **Optimize** tab remains available and can:
+The app can display companion devices paired with the Bridge without exposing their bearer credentials.
+
+## Optimization Reports
+
+The **Optimize** tab can:
 
 - run a live optimization scan;
-- calculate a 0–100 optimization score;
+- calculate a 0–100 score;
 - show prioritized findings and recommended fixes;
-- generate a **1080×1920 full PNG** or **1080×1350 summary PNG** locally on the phone;
-- save reports to the **MechOS Reports** photo album;
-- share a report image through the phone share sheet;
+- generate a **1080×1920 full PNG** or **1080×1350 summary PNG**;
+- save images to the **MechOS Reports** album;
+- share reports through the system share sheet;
 - include a unique report ID and timestamp.
 
-## Existing companion features
+## Existing controls
 
-- One-time-code pairing with a MechOS PC / Steam Deck.
-- Device credential stored using Android Keystore / Apple Keychain.
-- MechOS system dashboard.
-- MechScope/Desktop session controls.
-- MechOS update check/install controls.
-- RadarAI health, alerts, and quick scan.
-- Restart/shutdown controls with confirmation dialogs.
-- Demo Mode.
-- Dark MechOS visual theme.
+- six-digit one-time pairing
+- Android Keystore / Apple Keychain credential storage
+- MechOS dashboard
+- MechScope/Desktop switching
+- MechOS update check/install controls
+- RadarAI health, alerts, and quick scan
+- restart/shutdown with confirmation dialogs
+- Demo Mode
+- dark MechOS visual theme
 
-## Build prerequisites
+All remote actions remain limited to the Bridge's explicit allow-list. The phone cannot submit arbitrary shell commands.
 
-Use a current Flutter toolchain compatible with Dart 3.9+. Android builds can be created on Windows, Linux, or macOS. **iPhone/iOS builds require macOS with Xcode** for Apple signing/building.
+## Navigation
 
-## Generate Android + iOS host projects
+`Home → Live → Optimize → Games → More`
+
+More contains Remote Access, Notifications, RadarAI, MechOS Controls, Developer Bug Report, Paired Mobile Devices, and Settings.
+
+## Install/update the MechOS Bridge
+
+On the MechOS machine:
+
+```bash
+./scripts/install-bridge.sh
+```
+
+That installs and enables both:
+
+- `mechos-companion-bridge.service`
+- `mechos-companion-push.service`
+
+View the current pairing code:
+
+```bash
+journalctl --user -u mechos-companion-bridge -n 30
+```
+
+View background push-dispatcher status:
+
+```bash
+journalctl --user -u mechos-companion-push -n 30
+```
+
+Default Bridge port: `47831`.
+
+## Flutter build
+
+Generate current Android/iOS host projects and apply MechOS patches:
 
 ```bash
 ./scripts/bootstrap-platforms.sh
 ```
 
-Then test:
+Validate and test:
 
 ```bash
+python3 scripts/validate_source.py
 flutter analyze
 flutter test
-flutter run
 ```
 
-Build Android APK:
+Build Android:
 
 ```bash
 flutter build apk --release
-```
-
-Android output:
-
-```text
-build/app/outputs/flutter-apk/app-release.apk
-```
-
-Build a Play Store bundle:
-
-```bash
 flutter build appbundle --release
 ```
+
+The GitHub Android workflow uploads `MechOS-Companion-Android` containing the APK/AAB when successful.
 
 Build iPhone on macOS:
 
@@ -110,68 +163,26 @@ Build iPhone on macOS:
 flutter build ios --release
 ```
 
-Then open `ios/Runner.xcworkspace` in Xcode, choose your Apple signing team, and archive/install the app.
+The GitHub iOS workflow currently validates an **unsigned** iPhone build. Physical-device/TestFlight distribution still requires Apple Developer signing.
 
-## Install or update the MechOS Bridge
+## Application identity
 
-From this project on the MechOS computer:
+- Android application ID: `com.mechos.companion`
+- iOS bundle ID: `com.mechos.companion`
+- App name: `MechOS Companion`
+- Current source version: `0.1.3+4`
 
-```bash
-./scripts/install-bridge.sh
-```
+## Security summary
 
-View the pairing code:
+- no arbitrary shell-command endpoint
+- explicit action allow-list
+- random per-device bearer token
+- OS-backed secure token storage on mobile
+- local/private remote route preference and failover
+- no recommended public router port forwarding
+- HTTPS required for non-private remote hostnames
+- read-only optimization/telemetry scans
+- provider credentials kept out of source control
+- background dispatcher invokes only a fixed `mechos-push-relay` helper and passes JSON on stdin
 
-```bash
-journalctl --user -u mechos-companion-bridge -n 30
-```
-
-Enter the computer's LAN address and six-digit pairing code on the phone. Default bridge port: **47831**.
-
-## Update progress integration
-
-For real download/install percentages, MechOS Updater should write structured status to one of:
-
-```text
-/run/mechos-update/status.json
-~/.local/state/mechos-update/status.json
-```
-
-See `docs/API.md` for the status-file schema and all v0.1.2 endpoints.
-
-## Security design
-
-- The phone cannot send arbitrary shell commands.
-- The bridge uses an explicit remote-action allow-list.
-- Pairing creates a random per-device credential.
-- Mobile credentials go into OS-backed secure storage.
-- Power/session actions require confirmation in the app.
-- Optimization and developer scans are read-only.
-- Paired-device listing never returns pairing credentials.
-- Developer logs are bounded to known MechOS user services.
-- Report PNG generation happens locally on the phone.
-- Trusted-LAN development still uses authenticated local HTTP. Add authenticated TLS/certificate pinning before exposing the bridge beyond the local network.
-
-## MechOS helper commands expected
-
-- `mechos-update --check`
-- `mechos-update --install`
-- `mechos-session-select --mechscope`
-- `mechos-session-select --desktop`
-- `radarai status`
-- `radarai scan --quick`
-- `mechos-power-control --restart`
-- `mechos-power-control --shutdown`
-- optional: `mechos-game-compat --list --json`
-
-Missing helpers are reported to the app instead of falling back to arbitrary commands.
-
-## GitHub build automation
-
-GitHub Actions automatically builds Android and validates iOS on every push to `main`.
-
-- Download **MechOS-Companion.apk** from the `MechOS-Companion-Android` workflow artifact for Android sideloading.
-- The iOS workflow produces an **unsigned** build until Apple Developer signing credentials are configured.
-- Application ID / bundle ID: `com.mechos.companion`.
-
-See `docs/BUILDING.md` for details.
+See `docs/API.md`, `docs/BUILDING.md`, and `docs/REMOTE_ACCESS.md` for implementation details.
