@@ -15,10 +15,12 @@ class ReportShareService {
   }
 
   Future<void> share(String path, OptimizationReport report) async {
-    await Share.shareXFiles(
-      [XFile(path, mimeType: 'image/png')],
-      subject: 'MechOS Optimization Report ${report.reportId}',
-      text: 'MechOS optimization report ${report.reportId} • Score ${report.score}/100',
+    await SharePlus.instance.share(
+      ShareParams(
+        files: [XFile(path, mimeType: 'image/png')],
+        subject: 'MechOS Optimization Report ${report.reportId}',
+        text: 'MechOS optimization report ${report.reportId} • Score ${report.score}/100',
+      ),
     );
   }
 }
