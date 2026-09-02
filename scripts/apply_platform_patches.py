@@ -36,16 +36,8 @@ def android():
     text = gradle.read_text()
     text = re.sub(r'namespace\s*=\s*"[^"]+"', 'namespace = "com.mechos.companion"', text)
     text = re.sub(r'applicationId\s*=\s*"[^"]+"', 'applicationId = "com.mechos.companion"', text)
-    text = re.sub(r'compileSdk\s*=\s*[^\n]+', 'compileSdk = 37', text)
+    text = re.sub(r'compileSdk\s*=\s*[^\n]+', 'compileSdk = 36', text)
     gradle.write_text(text)
-
-    gradle_properties = ROOT / 'android/gradle.properties'
-    props = gradle_properties.read_text() if gradle_properties.exists() else ''
-    if 'android.suppressUnsupportedCompileSdk=37' not in props:
-        if props and not props.endswith('\n'):
-            props += '\n'
-        props += 'android.suppressUnsupportedCompileSdk=37\n'
-        gradle_properties.write_text(props)
 
 
 def ios():
