@@ -30,14 +30,6 @@ jobs:
           channel: stable
           cache: true
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Install Android SDK 37
-        run: |
-          yes | sdkmanager --licenses >/dev/null || true
-          sdkmanager "platforms;android-37"
-
       - name: Generate platform projects
         run: ./scripts/bootstrap-platforms.sh
 
