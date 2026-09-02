@@ -1,7 +1,7 @@
 name: mechos_companion_mobile
 description: MechOS Companion Mobile for Android and iPhone.
 publish_to: "none"
-version: 0.1.1+2
+version: 0.1.2+3
 
 environment:
   sdk: ">=3.9.0 <4.0.0"
