@@ -11,9 +11,8 @@ class PairResult {
 }
 
 class MechApiClient {
-  MechApiClient({required String baseUrl, String? token})
-      : baseUrl = baseUrl.replaceAll(RegExp(r'/+$'), ''),
-        token = token;
+  MechApiClient({required String baseUrl, this.token})
+      : baseUrl = baseUrl.replaceAll(RegExp(r'/+$'), '');
 
   final String baseUrl;
   final String? token;
@@ -64,11 +63,14 @@ class MechApiClient {
   }
 
   Future<String> action(String action, {String? value}) async {
+    final payload = <String, dynamic>{'action': action};
+    if (value != null) payload['value'] = value;
+
     final response = await _http
         .post(
           Uri.parse('$baseUrl/v1/action'),
           headers: _headers,
-          body: jsonEncode({'action': action, if (value != null) 'value': value}),
+          body: jsonEncode(payload),
         )
         .timeout(const Duration(seconds: 20));
     final body = _decode(response);
