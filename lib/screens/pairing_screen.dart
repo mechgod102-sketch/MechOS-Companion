@@ -10,11 +10,18 @@ class PairingScreen extends StatefulWidget {
 
 class _PairingScreenState extends State<PairingScreen> {
   final url = TextEditingController(text: 'http://mechos.local:47831');
+  final remoteUrl = TextEditingController();
   final code = TextEditingController();
   final name = TextEditingController(text: 'My phone');
 
   @override
-  void dispose() { url.dispose(); code.dispose(); name.dispose(); super.dispose(); }
+  void dispose() {
+    url.dispose();
+    remoteUrl.dispose();
+    code.dispose();
+    name.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) => Scaffold(
@@ -31,7 +38,21 @@ class _PairingScreenState extends State<PairingScreen> {
                   const SizedBox(height: 8),
                   const Text('Pair your Android or iPhone with a MechOS PC or Steam Deck.', textAlign: TextAlign.center, style: TextStyle(color: MechTheme.subtle)),
                   const SizedBox(height: 28),
-                  TextField(controller: url, keyboardType: TextInputType.url, decoration: const InputDecoration(labelText: 'MechOS Bridge address', prefixIcon: Icon(Icons.lan))),
+                  TextField(
+                    controller: url,
+                    keyboardType: TextInputType.url,
+                    decoration: const InputDecoration(labelText: 'Local MechOS Bridge address', prefixIcon: Icon(Icons.lan)),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: remoteUrl,
+                    keyboardType: TextInputType.url,
+                    decoration: const InputDecoration(
+                      labelText: 'Remote private address (optional)',
+                      prefixIcon: Icon(Icons.public),
+                      helperText: 'Tailscale/WireGuard address. Do not router-port-forward the bridge.',
+                    ),
+                  ),
                   const SizedBox(height: 12),
                   TextField(controller: code, keyboardType: TextInputType.number, maxLength: 6, decoration: const InputDecoration(labelText: '6-digit pairing code', prefixIcon: Icon(Icons.password), counterText: '')),
                   const SizedBox(height: 12),
@@ -42,14 +63,21 @@ class _PairingScreenState extends State<PairingScreen> {
                   ],
                   const SizedBox(height: 18),
                   FilledButton.icon(
-                    onPressed: widget.state.loading ? null : () => widget.state.pair(baseUrl: url.text.trim(), code: code.text.trim(), mobileName: name.text.trim()),
+                    onPressed: widget.state.loading
+                        ? null
+                        : () => widget.state.pair(
+                              baseUrl: url.text.trim(),
+                              remoteUrl: remoteUrl.text.trim(),
+                              code: code.text.trim(),
+                              mobileName: name.text.trim(),
+                            ),
                     icon: widget.state.loading ? const SizedBox.square(dimension: 18, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.link),
                     label: const Padding(padding: EdgeInsets.symmetric(vertical: 14), child: Text('Pair with MechOS')),
                   ),
                   const SizedBox(height: 10),
                   OutlinedButton(onPressed: widget.state.useDemo, child: const Text('Preview in Demo Mode')),
                   const SizedBox(height: 16),
-                  const Text('On MechOS, start the included bridge service and enter the pairing code shown on the computer.', textAlign: TextAlign.center, style: TextStyle(color: MechTheme.subtle, fontSize: 12)),
+                  const Text('Pair on your trusted local network first. Remote Access can also be configured later in More → Remote Access.', textAlign: TextAlign.center, style: TextStyle(color: MechTheme.subtle, fontSize: 12)),
                 ]),
               ),
             ),

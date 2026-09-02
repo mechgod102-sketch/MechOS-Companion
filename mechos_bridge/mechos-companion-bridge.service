@@ -4,7 +4,8 @@ After=network.target
 
 [Service]
 Type=simple
-ExecStart=/usr/bin/python3 /usr/lib/mechos-companion-bridge/server.py
+WorkingDirectory=/usr/lib/mechos-companion-bridge
+ExecStart=/usr/bin/python3 /usr/lib/mechos-companion-bridge/server_v012.py
 Restart=on-failure
 RestartSec=3
 

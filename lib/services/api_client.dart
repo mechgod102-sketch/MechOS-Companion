@@ -1,8 +1,9 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import '../models/companion_features.dart';
 import '../models/device_status.dart';
-import '../models/radar_alert.dart';
 import '../models/optimization_report.dart';
+import '../models/radar_alert.dart';
 
 class PairResult {
   const PairResult({required this.token, required this.deviceName});
@@ -24,57 +25,77 @@ class MechApiClient {
         if (token != null) 'Authorization': 'Bearer $token',
       };
 
+  Future<Map<String, dynamic>> health({int timeout = 3}) => _get('/v1/health', timeout: timeout);
+
   Future<PairResult> pair(String code, String mobileName) async {
-    final response = await _http
-        .post(
-          Uri.parse('$baseUrl/v1/pair'),
-          headers: _headers,
-          body: jsonEncode({'code': code, 'device_name': mobileName}),
-        )
-        .timeout(const Duration(seconds: 8));
-    final body = _decode(response);
+    final body = await _post('/v1/pair', {'code': code, 'device_name': mobileName}, timeout: 8);
     return PairResult(
       token: body['token'] as String,
       deviceName: body['mechos_name'] as String? ?? 'MechOS',
     );
   }
 
-  Future<DeviceStatus> status() async {
-    final response = await _http
-        .get(Uri.parse('$baseUrl/v1/status'), headers: _headers)
-        .timeout(const Duration(seconds: 8));
-    return DeviceStatus.fromJson(_decode(response));
-  }
+  Future<DeviceStatus> status() async => DeviceStatus.fromJson(await _get('/v1/status'));
 
   Future<List<RadarAlert>> alerts() async {
-    final response = await _http
-        .get(Uri.parse('$baseUrl/v1/radarai/alerts'), headers: _headers)
-        .timeout(const Duration(seconds: 8));
-    final body = _decode(response);
+    final body = await _get('/v1/radarai/alerts');
     final items = body['alerts'] as List<dynamic>? ?? const [];
-    return items.map((e) => RadarAlert.fromJson(e as Map<String, dynamic>)).toList();
+    return items.map((e) => RadarAlert.fromJson((e as Map).cast<String, dynamic>())).toList();
   }
 
-  Future<OptimizationReport> optimizationReport() async {
-    final response = await _http
-        .get(Uri.parse('$baseUrl/v1/optimization/report'), headers: _headers)
-        .timeout(const Duration(seconds: 15));
-    return OptimizationReport.fromJson(_decode(response));
+  Future<OptimizationReport> optimizationReport() async =>
+      OptimizationReport.fromJson(await _get('/v1/optimization/report', timeout: 15));
+
+  Future<PerformanceSample> performanceSample() async =>
+      PerformanceSample.fromJson(await _get('/v1/performance/live'));
+
+  Future<List<GameCompatibility>> compatibilityCatalog() async {
+    final body = await _get('/v1/games/compatibility');
+    final items = body['games'] as List<dynamic>? ?? const [];
+    return items.map((e) => GameCompatibility.fromJson((e as Map).cast<String, dynamic>())).toList();
   }
+
+  Future<UpdateProgress> updateProgress() async =>
+      UpdateProgress.fromJson(await _get('/v1/update/progress'));
+
+  Future<List<CompanionNotification>> notifications() async {
+    final body = await _get('/v1/notifications');
+    final items = body['notifications'] as List<dynamic>? ?? const [];
+    return items.map((e) => CompanionNotification.fromJson((e as Map).cast<String, dynamic>())).toList();
+  }
+
+  Future<List<PairedMobileDevice>> pairedDevices() async {
+    final body = await _get('/v1/devices');
+    final items = body['devices'] as List<dynamic>? ?? const [];
+    return items.map((e) => PairedMobileDevice.fromJson((e as Map).cast<String, dynamic>())).toList();
+  }
+
+  Future<void> revokeDevice(String id) async {
+    await _post('/v1/device/revoke', {'id': id});
+  }
+
+  Future<DeveloperBundle> developerBundle() async =>
+      DeveloperBundle.fromJson(await _get('/v1/developer/bug-report', timeout: 25));
 
   Future<String> action(String action, {String? value}) async {
     final payload = <String, dynamic>{'action': action};
     if (value != null) payload['value'] = value;
-
-    final response = await _http
-        .post(
-          Uri.parse('$baseUrl/v1/action'),
-          headers: _headers,
-          body: jsonEncode(payload),
-        )
-        .timeout(const Duration(seconds: 20));
-    final body = _decode(response);
+    final body = await _post('/v1/action', payload, timeout: 95);
     return body['message'] as String? ?? 'Action sent';
+  }
+
+  Future<Map<String, dynamic>> _get(String path, {int timeout = 8}) async {
+    final response = await _http
+        .get(Uri.parse('$baseUrl$path'), headers: _headers)
+        .timeout(Duration(seconds: timeout));
+    return _decode(response);
+  }
+
+  Future<Map<String, dynamic>> _post(String path, Map<String, dynamic> payload, {int timeout = 20}) async {
+    final response = await _http
+        .post(Uri.parse('$baseUrl$path'), headers: _headers, body: jsonEncode(payload))
+        .timeout(Duration(seconds: timeout));
+    return _decode(response);
   }
 
   Map<String, dynamic> _decode(http.Response response) {

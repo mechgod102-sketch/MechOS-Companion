@@ -27,7 +27,7 @@ def android():
     if app is None:
         raise SystemExit('Android application element missing.')
     app.set(f'{{{ANDROID_NS}}}label', 'MechOS Companion')
-    # v0.1.1 pairs over authenticated LAN HTTP. Remove this when the bridge moves to TLS.
+    # Development builds pair over authenticated LAN HTTP. Remove this when the bridge moves to TLS.
     app.set(f'{{{ANDROID_NS}}}usesCleartextTraffic', 'true')
     app.set(f'{{{ANDROID_NS}}}requestLegacyExternalStorage', 'true')
     tree.write(manifest, encoding='utf-8', xml_declaration=True)
@@ -38,6 +38,16 @@ def android():
     text = re.sub(r'applicationId\s*=\s*"[^"]+"', 'applicationId = "com.mechos.companion"', text)
     text = re.sub(r'compileSdk\s*=\s*[^\n]+', 'compileSdk = 36', text)
     gradle.write_text(text)
+
+    # flutter create uses the --org value for MainActivity. Keep the Kotlin
+    # package aligned with the final namespace/applicationId used above.
+    activities = list((ROOT / 'android/app/src/main/kotlin').glob('**/MainActivity.kt'))
+    if not activities:
+        raise SystemExit('Android MainActivity.kt missing after flutter create.')
+    for activity in activities:
+        source = activity.read_text()
+        source = re.sub(r'^package\s+[^\n]+', 'package com.mechos.companion', source, count=1, flags=re.MULTILINE)
+        activity.write_text(source)
 
 
 def ios():

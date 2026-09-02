@@ -12,6 +12,13 @@ class DashboardScreen extends StatelessWidget {
     final s = state.status;
     final ramPct = s.ramTotalGb <= 0 ? 0.0 : s.ramUsedGb / s.ramTotalGb;
     final diskPct = s.storageTotalGb <= 0 ? 0.0 : s.storageUsedGb / s.storageTotalGb;
+    final routeColor = state.connectionRoute == ConnectionRoute.remote
+        ? MechTheme.success
+        : state.connectionRoute == ConnectionRoute.local
+            ? MechTheme.primary
+            : state.connectionRoute == ConnectionRoute.offline
+                ? MechTheme.danger
+                : MechTheme.warning;
     return RefreshIndicator(
       onRefresh: state.refresh,
       child: ListView(padding: const EdgeInsets.all(16), children: [
@@ -20,8 +27,23 @@ class DashboardScreen extends StatelessWidget {
             Text(s.hostname, style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w900)),
             Text(s.osVersion, style: const TextStyle(color: MechTheme.subtle)),
           ])),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(border: Border.all(color: routeColor), borderRadius: BorderRadius.circular(999)),
+            child: Text(state.connectionRouteLabel, style: TextStyle(color: routeColor, fontWeight: FontWeight.w900)),
+          ),
           IconButton(onPressed: state.loading ? null : state.refresh, icon: const Icon(Icons.refresh)),
         ]),
+        if (state.isRemote) ...[
+          const SizedBox(height: 10),
+          const Card(
+            child: ListTile(
+              leading: Icon(Icons.vpn_lock_outlined, color: MechTheme.success),
+              title: Text('Connected through Remote Access', style: TextStyle(fontWeight: FontWeight.w900)),
+              subtitle: Text('This session is using your private VPN/Tailscale bridge route.'),
+            ),
+          ),
+        ],
         if (state.error != null) ...[
           const SizedBox(height: 12),
           Card(child: Padding(padding: const EdgeInsets.all(14), child: Row(children: [const Icon(Icons.wifi_off, color: MechTheme.danger), const SizedBox(width: 10), Expanded(child: Text(state.error!))]))),

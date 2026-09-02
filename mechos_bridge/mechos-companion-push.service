@@ -1,0 +1,13 @@
+[Unit]
+Description=MechOS Companion Background Push Dispatcher
+After=network-online.target mechos-companion-bridge.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 /usr/lib/mechos-companion-bridge/push_dispatcher.py
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target
