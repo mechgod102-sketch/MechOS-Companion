@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.1.3
+
+- Added Remote Access configuration for private Tailscale/WireGuard routes.
+- Added automatic Local → Remote failover with Local / Remote / Offline status in the mobile UI.
+- Added remote address validation: private/Tailscale HTTP is allowed, while other remote hostnames require HTTPS.
+- Added optional remote private address during initial pairing and editable Remote Access settings afterward.
+- Added away-from-home support for dashboard, telemetry, RadarAI, game compatibility, optimization reports, update state, developer reports, and approved controls.
+- Added provider-neutral background hardware/RadarAI push dispatcher service.
+- Added fixed `mechos-push-relay` JSON-on-stdin provider contract; no APNs/FCM credentials are stored in the public repo.
+- Added hardware alert de-duplication and cooldown handling in the background dispatcher.
+- Added Remote Access security documentation and explicit no-router-port-forwarding guidance.
+
 ## 0.1.2
 
 - Added live CPU/GPU/RAM/storage/temperature telemetry and mobile history graphs.
