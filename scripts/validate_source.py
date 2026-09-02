@@ -15,6 +15,7 @@ required = [
     'mechos_bridge/server.py',
     'scripts/bootstrap-platforms.sh',
     'scripts/apply_platform_patches.py',
+    'test/optimization_report_test.dart',
 ]
 missing = [p for p in required if not (root / p).exists()]
 if missing:
@@ -29,7 +30,7 @@ for dep in [
     'flutter_secure_storage: ^11.0.0',
     'shared_preferences: ^2.5.5',
     'path_provider: ^2.1.5',
-    'share_plus: ^10.1.4',
+    'share_plus: ^13.3.0',
     'gal: ^2.3.2',
 ]:
     assert dep in pubspec, dep
@@ -47,7 +48,8 @@ assert 'ImageByteFormat.png' in image_service
 
 share_service = (root / 'lib/services/report_share_service.dart').read_text()
 assert 'Gal.putImage' in share_service
-assert 'Share.shareXFiles' in share_service
+assert 'SharePlus.instance.share' in share_service
+assert 'ShareParams(' in share_service
 
 screen = (root / 'lib/screens/optimization_report_screen.dart').read_text()
 for label in ['Scan Optimization', 'Generate Report Image', 'Save to Phone', 'Share to Discord']:
