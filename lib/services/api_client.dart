@@ -25,6 +25,8 @@ class MechApiClient {
         if (token != null) 'Authorization': 'Bearer $token',
       };
 
+  Future<Map<String, dynamic>> health({int timeout = 3}) => _get('/v1/health', timeout: timeout);
+
   Future<PairResult> pair(String code, String mobileName) async {
     final body = await _post('/v1/pair', {'code': code, 'device_name': mobileName}, timeout: 8);
     return PairResult(
