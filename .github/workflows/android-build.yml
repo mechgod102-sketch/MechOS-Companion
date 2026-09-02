@@ -1,0 +1,63 @@
+name: Android Build
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-android:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Generate platform projects
+        run: ./scripts/bootstrap-platforms.sh
+
+      - name: Validate source
+        run: python3 scripts/validate_source.py
+
+      - name: Analyze
+        run: flutter analyze
+
+      - name: Test
+        run: flutter test
+
+      - name: Build release APK
+        run: flutter build apk --release
+
+      - name: Build release app bundle
+        run: flutter build appbundle --release
+
+      - name: Collect Android packages
+        run: |
+          mkdir -p dist/android
+          cp build/app/outputs/flutter-apk/app-release.apk dist/android/MechOS-Companion.apk
+          cp build/app/outputs/bundle/release/app-release.aab dist/android/MechOS-Companion.aab
+          sha256sum dist/android/* > dist/android/SHA256SUMS.txt
+
+      - name: Upload Android artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: MechOS-Companion-Android
+          path: dist/android/
+          if-no-files-found: error

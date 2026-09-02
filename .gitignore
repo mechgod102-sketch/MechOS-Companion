@@ -1,0 +1,14 @@
+.dart_tool/
+.packages
+.pub/
+build/
+android/.gradle/
+ios/Pods/
+ios/.symlinks/
+*.iml
+.DS_Store
+__pycache__/
+*.pyc
+.metadata
+.flutter-plugins
+.flutter-plugins-dependencies

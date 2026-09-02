@@ -1,0 +1,12 @@
+[Unit]
+Description=MechOS Companion Bridge
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 /usr/lib/mechos-companion-bridge/server.py
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=default.target

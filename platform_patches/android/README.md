@@ -1,0 +1,1 @@
+After `flutter create`, `scripts/apply_platform_patches.py` adds INTERNET permission and local cleartext networking for the v0.1.1 LAN bridge. A future bridge release should move to authenticated TLS and remove the cleartext exception.

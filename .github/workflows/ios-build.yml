@@ -1,0 +1,57 @@
+name: iOS Build
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-ios:
+    runs-on: macos-15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Generate platform projects
+        run: ./scripts/bootstrap-platforms.sh
+
+      - name: Validate source
+        run: python3 scripts/validate_source.py
+
+      - name: Analyze
+        run: flutter analyze
+
+      - name: Test
+        run: flutter test
+
+      - name: Build unsigned iPhone app
+        run: flutter build ios --release --no-codesign
+
+      - name: Package unsigned iOS build
+        run: |
+          mkdir -p dist/ios/Payload
+          cp -R build/ios/iphoneos/Runner.app dist/ios/Payload/MechOS\ Companion.app
+          cd dist/ios
+          zip -qry MechOS-Companion-unsigned.zip Payload
+          shasum -a 256 MechOS-Companion-unsigned.zip > SHA256SUMS.txt
+
+      - name: Upload iOS artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: MechOS-Companion-iOS-Unsigned
+          path: |
+            dist/ios/MechOS-Companion-unsigned.zip
+            dist/ios/SHA256SUMS.txt
+          if-no-files-found: error
