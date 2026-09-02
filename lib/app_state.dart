@@ -6,6 +6,8 @@ import 'models/radar_alert.dart';
 import 'services/api_client.dart';
 import 'services/secure_store.dart';
 
+enum ConnectionRoute { local, remote, offline, demo }
+
 class AppState extends ChangeNotifier {
   AppState(this.store);
 
@@ -23,8 +25,25 @@ class AppState extends ChangeNotifier {
   bool loading = false;
   bool demoMode = false;
   String? error;
+  ConnectionRoute connectionRoute = ConnectionRoute.offline;
+  String? activeBaseUrl;
 
   bool get isConnected => connection != null || demoMode;
+  bool get remoteConfigured => (connection?.remoteUrl?.trim().isNotEmpty ?? false);
+  bool get isRemote => connectionRoute == ConnectionRoute.remote;
+
+  String get connectionRouteLabel {
+    switch (connectionRoute) {
+      case ConnectionRoute.local:
+        return 'Local';
+      case ConnectionRoute.remote:
+        return 'Remote';
+      case ConnectionRoute.demo:
+        return 'Demo';
+      case ConnectionRoute.offline:
+        return 'Offline';
+    }
+  }
 
   Future<void> restore() async {
     connection = await store.load();
@@ -32,15 +51,31 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> pair({required String baseUrl, required String code, required String mobileName}) async {
+  Future<void> pair({
+    required String baseUrl,
+    required String code,
+    required String mobileName,
+    String? remoteUrl,
+  }) async {
     _busy(true);
     try {
-      final client = MechApiClient(baseUrl: baseUrl);
+      final local = _normalizeBaseUrl(baseUrl);
+      final normalizedRemote = remoteUrl == null || remoteUrl.trim().isEmpty
+          ? null
+          : _normalizeRemoteUrl(remoteUrl);
+      final client = MechApiClient(baseUrl: local);
       final result = await client.pair(code, mobileName);
       client.close();
-      connection = SavedConnection(baseUrl: baseUrl, token: result.token, deviceName: result.deviceName);
+      connection = SavedConnection(
+        localUrl: local,
+        remoteUrl: normalizedRemote,
+        token: result.token,
+        deviceName: result.deviceName,
+      );
       await store.save(connection!);
       demoMode = false;
+      activeBaseUrl = local;
+      connectionRoute = ConnectionRoute.local;
       optimizationReport = null;
       latestPerformance = null;
       developerBundle = null;
@@ -56,6 +91,8 @@ class AppState extends ChangeNotifier {
   void useDemo() {
     demoMode = true;
     connection = null;
+    connectionRoute = ConnectionRoute.demo;
+    activeBaseUrl = null;
     status = DeviceStatus.demo;
     optimizationReport = OptimizationReport.demo;
     latestPerformance = PerformanceSample.demo();
@@ -75,23 +112,53 @@ class AppState extends ChangeNotifier {
   Future<void> refresh() async {
     if (demoMode) {
       status = DeviceStatus.demo;
+      connectionRoute = ConnectionRoute.demo;
       notifyListeners();
       return;
     }
-    final c = connection;
-    if (c == null) return;
+    if (connection == null) return;
     _busy(true);
     try {
-      final client = MechApiClient(baseUrl: c.baseUrl, token: c.token);
+      final endpoint = await _resolveEndpoint();
+      final c = _requireConnection();
+      final client = MechApiClient(baseUrl: endpoint, token: c.token);
       status = await client.status();
       alerts = await client.alerts();
       client.close();
       error = null;
     } catch (e) {
+      connectionRoute = ConnectionRoute.offline;
+      activeBaseUrl = null;
       error = _message(e);
     } finally {
       _busy(false);
     }
+  }
+
+  Future<String> testRemoteUrl(String remoteUrl) async {
+    final normalized = _normalizeRemoteUrl(remoteUrl);
+    final client = MechApiClient(baseUrl: normalized, token: connection?.token);
+    try {
+      final health = await client.health(timeout: 5);
+      final version = health['version'] as String? ?? 'unknown version';
+      return 'Remote bridge reachable • $version';
+    } finally {
+      client.close();
+    }
+  }
+
+  Future<void> saveRemoteUrl(String remoteUrl) async {
+    final c = _requireConnection();
+    final trimmed = remoteUrl.trim();
+    connection = trimmed.isEmpty
+        ? c.copyWith(clearRemoteUrl: true)
+        : c.copyWith(remoteUrl: _normalizeRemoteUrl(trimmed));
+    await store.save(connection!);
+    activeBaseUrl = null;
+    connectionRoute = ConnectionRoute.offline;
+    error = null;
+    notifyListeners();
+    await refresh();
   }
 
   Future<OptimizationReport> scanOptimization() async {
@@ -103,7 +170,7 @@ class AppState extends ChangeNotifier {
     final c = _requireConnection();
     _busy(true);
     try {
-      final client = MechApiClient(baseUrl: c.baseUrl, token: c.token);
+      final client = MechApiClient(baseUrl: await _resolveEndpoint(), token: c.token);
       optimizationReport = await client.optimizationReport();
       client.close();
       error = null;
@@ -123,7 +190,7 @@ class AppState extends ChangeNotifier {
       return latestPerformance!;
     }
     final c = _requireConnection();
-    final client = MechApiClient(baseUrl: c.baseUrl, token: c.token);
+    final client = MechApiClient(baseUrl: await _resolveEndpoint(), token: c.token);
     try {
       latestPerformance = await client.performanceSample();
       error = null;
@@ -145,7 +212,7 @@ class AppState extends ChangeNotifier {
       return;
     }
     final c = _requireConnection();
-    final client = MechApiClient(baseUrl: c.baseUrl, token: c.token);
+    final client = MechApiClient(baseUrl: await _resolveEndpoint(), token: c.token);
     try {
       games = await client.compatibilityCatalog();
       error = null;
@@ -164,7 +231,7 @@ class AppState extends ChangeNotifier {
       return;
     }
     final c = _requireConnection();
-    final client = MechApiClient(baseUrl: c.baseUrl, token: c.token);
+    final client = MechApiClient(baseUrl: await _resolveEndpoint(), token: c.token);
     try {
       updateProgress = await client.updateProgress();
       error = null;
@@ -183,7 +250,7 @@ class AppState extends ChangeNotifier {
       return;
     }
     final c = _requireConnection();
-    final client = MechApiClient(baseUrl: c.baseUrl, token: c.token);
+    final client = MechApiClient(baseUrl: await _resolveEndpoint(), token: c.token);
     try {
       notifications = await client.notifications();
       error = null;
@@ -205,7 +272,7 @@ class AppState extends ChangeNotifier {
       return;
     }
     final c = _requireConnection();
-    final client = MechApiClient(baseUrl: c.baseUrl, token: c.token);
+    final client = MechApiClient(baseUrl: await _resolveEndpoint(), token: c.token);
     try {
       pairedMobileDevices = await client.pairedDevices();
       error = null;
@@ -224,7 +291,7 @@ class AppState extends ChangeNotifier {
       return;
     }
     final c = _requireConnection();
-    final client = MechApiClient(baseUrl: c.baseUrl, token: c.token);
+    final client = MechApiClient(baseUrl: await _resolveEndpoint(), token: c.token);
     try {
       await client.revokeDevice(id);
       pairedMobileDevices = await client.pairedDevices();
@@ -257,7 +324,7 @@ class AppState extends ChangeNotifier {
     final c = _requireConnection();
     _busy(true);
     try {
-      final client = MechApiClient(baseUrl: c.baseUrl, token: c.token);
+      final client = MechApiClient(baseUrl: await _resolveEndpoint(), token: c.token);
       developerBundle = await client.developerBundle();
       client.close();
       optimizationReport = developerBundle!.optimizationReport;
@@ -274,7 +341,7 @@ class AppState extends ChangeNotifier {
   Future<String> runAction(String action, {String? value}) async {
     if (demoMode) return 'Demo mode: $action';
     final c = _requireConnection();
-    final client = MechApiClient(baseUrl: c.baseUrl, token: c.token);
+    final client = MechApiClient(baseUrl: await _resolveEndpoint(), token: c.token);
     try {
       final result = await client.action(action, value: value);
       await refresh();
@@ -296,8 +363,46 @@ class AppState extends ChangeNotifier {
     notifications = const [];
     pairedMobileDevices = const [];
     demoMode = false;
+    connectionRoute = ConnectionRoute.offline;
+    activeBaseUrl = null;
     error = null;
     notifyListeners();
+  }
+
+  Future<String> _resolveEndpoint() async {
+    final c = _requireConnection();
+    final candidates = <_EndpointCandidate>[];
+
+    if (activeBaseUrl != null) {
+      candidates.add(_EndpointCandidate(activeBaseUrl!, connectionRoute));
+    }
+    candidates.add(_EndpointCandidate(c.localUrl, ConnectionRoute.local));
+    final remote = c.remoteUrl?.trim();
+    if (remote != null && remote.isNotEmpty) {
+      candidates.add(_EndpointCandidate(remote, ConnectionRoute.remote));
+    }
+
+    final seen = <String>{};
+    for (final candidate in candidates) {
+      if (!seen.add(candidate.url)) continue;
+      final client = MechApiClient(baseUrl: candidate.url, token: c.token);
+      try {
+        await client.health(timeout: 3);
+        activeBaseUrl = candidate.url;
+        connectionRoute = candidate.route;
+        return candidate.url;
+      } catch (_) {
+        // Try the next route. The bridge stays private; no public port probing is performed.
+      } finally {
+        client.close();
+      }
+    }
+
+    connectionRoute = ConnectionRoute.offline;
+    activeBaseUrl = null;
+    throw Exception(remoteConfigured
+        ? 'MechOS is unreachable on both local and remote private routes.'
+        : 'MechOS is unreachable on the local network. Configure Remote Access for away-from-home use.');
   }
 
   SavedConnection _requireConnection() {
@@ -306,10 +411,47 @@ class AppState extends ChangeNotifier {
     return c;
   }
 
+  String _normalizeBaseUrl(String input) {
+    final value = input.trim().replaceAll(RegExp(r'/+$'), '');
+    final uri = Uri.tryParse(value);
+    if (uri == null || !uri.hasScheme || uri.host.isEmpty || (uri.scheme != 'http' && uri.scheme != 'https')) {
+      throw Exception('Enter a valid MechOS Bridge address beginning with http:// or https://');
+    }
+    return value;
+  }
+
+  String _normalizeRemoteUrl(String input) {
+    final value = _normalizeBaseUrl(input);
+    final uri = Uri.parse(value);
+    if (uri.scheme == 'https') return value;
+    if (_isPrivateRemoteHost(uri.host)) return value;
+    throw Exception('Remote HTTP is allowed only for private VPN/Tailscale addresses. Use HTTPS for any other hostname.');
+  }
+
+  bool _isPrivateRemoteHost(String host) {
+    final lower = host.toLowerCase();
+    if (lower.endsWith('.ts.net')) return true;
+    final parts = host.split('.').map(int.tryParse).toList();
+    if (parts.length != 4 || parts.any((p) => p == null || p < 0 || p > 255)) return false;
+    final a = parts[0]!;
+    final b = parts[1]!;
+    if (a == 10 || a == 127) return true;
+    if (a == 192 && b == 168) return true;
+    if (a == 172 && b >= 16 && b <= 31) return true;
+    if (a == 100 && b >= 64 && b <= 127) return true; // Tailscale CGNAT range.
+    return false;
+  }
+
   String _message(Object error) => error.toString().replaceFirst('Exception: ', '');
 
   void _busy(bool value) {
     loading = value;
     notifyListeners();
   }
+}
+
+class _EndpointCandidate {
+  const _EndpointCandidate(this.url, this.route);
+  final String url;
+  final ConnectionRoute route;
 }
