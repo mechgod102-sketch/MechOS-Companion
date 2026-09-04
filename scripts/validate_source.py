@@ -53,7 +53,7 @@ for dep in [
     'gal: ^2.3.2',
     'multicast_dns: ^0.3.3',
     'flutter_local_notifications: ^20.1.0',
-    'workmanager: ^0.10.9',
+    'workmanager: 0.9.0+3',
 ]:
     assert dep in pubspec, dep
 assert 'version: 0.2.1+4' in pubspec
