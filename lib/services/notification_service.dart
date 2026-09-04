@@ -25,7 +25,7 @@ class NotificationService {
 
   static Future<void> initialize({bool requestPermissions = true}) async {
     const android = AndroidInitializationSettings('ic_notification');
-    const darwin = DarwinInitializationSettings(
+    final darwin = DarwinInitializationSettings(
       requestAlertPermission: false,
       requestBadgePermission: false,
       requestSoundPermission: false,
@@ -46,7 +46,7 @@ class NotificationService {
     );
 
     await _plugin.initialize(
-      settings: const InitializationSettings(android: android, iOS: darwin),
+      settings: InitializationSettings(android: android, iOS: darwin),
       onDidReceiveNotificationResponse: (response) {
         final action = response.actionId;
         if (action != null && action.isNotEmpty) {
