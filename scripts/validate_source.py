@@ -11,17 +11,22 @@ required = [
     'lib/models/discovered_device.dart',
     'lib/models/store_item.dart',
     'lib/models/download_task.dart',
+    'lib/models/remote_frame.dart',
     'lib/services/api_client.dart',
     'lib/services/device_discovery_service.dart',
+    'lib/services/notification_service.dart',
+    'lib/services/background_monitor.dart',
     'lib/services/report_image_service.dart',
     'lib/services/report_share_service.dart',
     'lib/screens/optimization_report_screen.dart',
     'lib/screens/store_screen.dart',
     'lib/screens/tools_screen.dart',
+    'lib/screens/remote_control_screen.dart',
     'mechos_bridge/server.py',
     'mechos_bridge/server_v020.py',
     'mechos_bridge/mechos-companion.avahi.service',
     'mechos_relay/server.py',
+    'platform_patches/android/ic_notification.xml',
     'scripts/bootstrap-platforms.sh',
     'scripts/apply_platform_patches.py',
     'test/optimization_report_test.dart',
@@ -47,9 +52,11 @@ for dep in [
     'share_plus: ^13.3.0',
     'gal: ^2.3.2',
     'multicast_dns: ^0.3.3',
+    'flutter_local_notifications: ^20.1.0',
+    'workmanager: ^0.10.9',
 ]:
     assert dep in pubspec, dep
-assert 'version: 0.2.0+3' in pubspec
+assert 'version: 0.2.1+4' in pubspec
 
 legacy_bridge = (root / 'mechos_bridge/server.py').read_text()
 assert "'/v1/optimization/report'" in legacy_bridge
@@ -58,11 +65,23 @@ assert 'ACTIONS = {' in legacy_bridge and 'shutil.which' in legacy_bridge
 assert 'nvidia-smi' in legacy_bridge and 'gpu_busy_percent' in legacy_bridge
 
 bridge = (root / 'mechos_bridge/server_v020.py').read_text()
-for endpoint in ['/v1/store/catalog', '/v1/store/install', '/v1/store/downloads']:
+for endpoint in [
+    '/v1/store/catalog',
+    '/v1/store/install',
+    '/v1/store/downloads',
+    '/v1/remote/frame',
+    '/v1/remote/input',
+]:
     assert endpoint in bridge
+assert "VERSION = '0.2.1'" in bridge
 assert 'STORE_ITEMS' in bridge
 assert 'RelayAgent' in bridge
 assert 'MECHOS_RELAY_URL' in bridge
+assert '_capture_frame' in bridge
+assert '_handle_remote_input' in bridge
+assert 'ydotool' in bridge and 'xdotool' in bridge
+assert "'lock': ['mechos-power-control', '--lock']" in bridge
+assert "'sleep': ['mechos-power-control', '--sleep']" in bridge
 
 relay = (root / 'mechos_relay/server.py').read_text()
 assert '/v1/agent/poll' in relay
@@ -92,10 +111,30 @@ assert 'Unified Store' in store_screen
 assert 'Creator Store' in store_screen
 assert 'Remote Downloads' in store_screen
 
+remote_screen = (root / 'lib/screens/remote_control_screen.dart').read_text()
+for label in ['Remote Control', 'Left Click', 'Right Click', 'Type on PC', 'Stream quality']:
+    assert label in remote_screen
+
+notifications = (root / 'lib/services/notification_service.dart').read_text()
+assert 'RadarAI alerts' in notifications
+assert 'MechOS system update available' in notifications
+assert "updateAction = 'update_now'" in notifications
+
+background = (root / 'lib/services/background_monitor.dart').read_text()
+assert 'registerPeriodicTask' in background
+assert 'NetworkType.connected' in background
+
+platform = (root / 'scripts/apply_platform_patches.py').read_text()
+assert 'android.permission.POST_NOTIFICATIONS' in platform
+assert 'UIBackgroundModes' in platform
+assert 'IPHONEOS_DEPLOYMENT_TARGET = 14.0' in platform
+
 api_doc = (root / 'docs/API.md').read_text()
 assert 'arbitrary' in api_doc
 assert '/v1/optimization/report' in api_doc
 assert '/v1/store/install' in api_doc
+assert '/v1/remote/frame' in api_doc
+assert '/v1/remote/input' in api_doc
 assert 'MechOS Anywhere' in api_doc
 
-print('MechOS Companion Mobile 0.2.0 source validation: PASS')
+print('MechOS Companion Mobile 0.2.1 source validation: PASS')
