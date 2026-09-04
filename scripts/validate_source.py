@@ -130,6 +130,8 @@ assert 'NetworkType.connected' in background
 
 platform = (root / 'scripts/apply_platform_patches.py').read_text()
 assert 'android.permission.POST_NOTIFICATIONS' in platform
+assert 'isCoreLibraryDesugaringEnabled = true' in platform
+assert 'com.android.tools:desugar_jdk_libs:2.1.4' in platform
 assert 'UIBackgroundModes' in platform
 assert 'IPHONEOS_DEPLOYMENT_TARGET = 14.0' in platform
 
