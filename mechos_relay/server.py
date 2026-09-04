@@ -20,6 +20,9 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 MAX_BODY = 1024 * 1024
+# Agent responses can contain a base64-encoded Remote Control frame. Keep
+# normal phone request bodies small while allowing bounded frame responses.
+MAX_AGENT_RESPONSE_BODY = 10 * 1024 * 1024
 REQUEST_TIMEOUT = 45
 POLL_TIMEOUT = 25
 DEVICES_FILE = Path(os.environ.get('MECHOS_RELAY_DEVICES_FILE', '/etc/mechos-relay/devices.json'))
@@ -57,7 +60,7 @@ def valid_agent(device_id: str, supplied_secret: str) -> bool:
 
 
 class Handler(BaseHTTPRequestHandler):
-    server_version = 'MechOSRelay/0.2.0'
+    server_version = 'MechOSRelay/0.2.1'
 
     def log_message(self, fmt, *args):
         print('[relay]', fmt % args)
@@ -71,14 +74,14 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
-    def _body_bytes(self) -> bytes:
+    def _body_bytes(self, max_body: int = MAX_BODY) -> bytes:
         length = int(self.headers.get('Content-Length', '0') or '0')
-        if length < 0 or length > MAX_BODY:
+        if length < 0 or length > max_body:
             raise ValueError('Request body is too large')
         return self.rfile.read(length) if length else b''
 
-    def _body_json(self) -> dict:
-        raw = self._body_bytes()
+    def _body_json(self, max_body: int = MAX_BODY) -> dict:
+        raw = self._body_bytes(max_body=max_body)
         if not raw:
             return {}
         value = json.loads(raw)
@@ -92,7 +95,7 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         parsed = urllib.parse.urlsplit(self.path)
         if parsed.path == '/v1/health':
-            return self._json(200, {'ok': True, 'version': '0.2.0'})
+            return self._json(200, {'ok': True, 'version': '0.2.1'})
         if parsed.path == '/v1/agent/poll':
             return self._poll(parsed)
         if parsed.path.startswith('/device/'):
@@ -132,7 +135,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def _respond(self):
         try:
-            data = self._body_json()
+            data = self._body_json(max_body=MAX_AGENT_RESPONSE_BODY)
         except Exception as exc:
             return self._json(400, {'error': str(exc)})
         device_id = str(data.get('device_id', ''))
@@ -199,7 +202,7 @@ def main():
     devices = load_devices()
     if not devices:
         print('WARNING: no MechOS relay devices are configured.')
-    print(f'MechOS Anywhere Relay 0.2.0 listening on http://{args.bind}:{args.port}')
+    print(f'MechOS Anywhere Relay 0.2.1 listening on http://{args.bind}:{args.port}')
     print('Use an HTTPS reverse proxy before exposing this service to the internet.')
     ThreadingHTTPServer((args.bind, args.port), Handler).serve_forever()
 
