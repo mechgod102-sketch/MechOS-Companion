@@ -1,7 +1,7 @@
 name: mechos_companion_mobile
 description: MechOS Companion Mobile for Android and iPhone.
 publish_to: "none"
-version: 0.1.1+2
+version: 0.2.0+3
 
 environment:
   sdk: ">=3.9.0 <4.0.0"
@@ -16,6 +16,7 @@ dependencies:
   share_plus: ^13.3.0
   cross_file: ^0.3.4+2
   gal: ^2.3.2
+  multicast_dns: ^0.3.3
 
 dev_dependencies:
   flutter_test:
