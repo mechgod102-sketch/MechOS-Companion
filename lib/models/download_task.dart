@@ -24,7 +24,7 @@ class DownloadTask {
         itemId: json['item_id'] as String? ?? '',
         name: json['name'] as String? ?? 'Download',
         state: json['state'] as String? ?? 'queued',
-        progress: (json['progress'] as num?)?.round().clamp(0, 100) ?? 0,
+        progress: ((json['progress'] as num?)?.round() ?? 0).clamp(0, 100).toInt(),
         message: json['message'] as String? ?? '',
       );
 }
