@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../app_state.dart';
+import '../services/notification_service.dart';
 import '../theme.dart';
 
 class SettingsScreen extends StatelessWidget {
@@ -14,7 +15,7 @@ class SettingsScreen extends StatelessWidget {
       children: [
         const Text('Settings', style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900)),
         const SizedBox(height: 4),
-        const Text('Connection, security, and MechOS Anywhere.', style: TextStyle(color: MechTheme.subtle)),
+        const Text('Connection, security, notifications, and MechOS Anywhere.', style: TextStyle(color: MechTheme.subtle)),
         const SizedBox(height: 16),
         Card(
           child: Padding(
@@ -68,7 +69,34 @@ class SettingsScreen extends StatelessWidget {
           ),
         const SizedBox(height: 12),
         Card(
-          child: const Column(
+          child: Column(
+            children: [
+              ListTile(
+                leading: const Icon(Icons.notifications_active_rounded, color: MechTheme.glow),
+                title: const Text('RadarAI + update notifications'),
+                subtitle: const Text('Background checks notify this phone about new RadarAI alerts and MechOS system updates.'),
+                trailing: const Icon(Icons.chevron_right_rounded),
+                onTap: () async {
+                  await NotificationService.requestNotificationPermissions();
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Notification permission checked.')),
+                    );
+                  }
+                },
+              ),
+              const Divider(height: 1),
+              const ListTile(
+                leading: Icon(Icons.cast_connected_rounded, color: MechTheme.glow),
+                title: Text('Remote Control'),
+                subtitle: Text('PC screen frames and touch/keyboard input require the paired-device token.'),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+        const Card(
+          child: Column(
             children: [
               ListTile(
                 leading: Icon(Icons.security_rounded, color: MechTheme.success),
@@ -85,11 +113,11 @@ class SettingsScreen extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 12),
-        Card(
-          child: const ListTile(
+        const Card(
+          child: ListTile(
             leading: Icon(Icons.info_outline_rounded),
             title: Text('MechOS Companion Mobile'),
-            subtitle: Text('Version 0.2.0 • MechOS Anywhere + Unified Store'),
+            subtitle: Text('Version 0.2.1 • Remote Control + RadarAI notifications'),
           ),
         ),
         const SizedBox(height: 20),

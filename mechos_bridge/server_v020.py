@@ -1,26 +1,38 @@
 #!/usr/bin/env python3
-"""MechOS Companion Bridge 0.2.0.
+"""MechOS Companion Bridge 0.2.1.
 
-Adds the Unified/Creator Store, remote install queue, and the optional
-MechOS Anywhere outbound relay agent while preserving the 0.1.1 bridge API.
+Adds Unified/Creator Store installs, MechOS Anywhere relay support, remote
+screen frames, and validated remote input while preserving the legacy API.
 """
 from __future__ import annotations
 
+import base64
 import json
 import os
 import secrets
 import shutil
 import socket
+import subprocess
+import tempfile
 import threading
 import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from datetime import datetime, timezone
 from http.server import ThreadingHTTPServer
+from pathlib import Path
 
 import server as legacy
 
-VERSION = '0.2.0'
+VERSION = '0.2.1'
+
+# Extend the legacy fixed action allow-list. These still execute only known
+# MechOS helper commands; mobile clients cannot provide executable text.
+legacy.ACTIONS.update({
+    'lock': ['mechos-power-control', '--lock'],
+    'sleep': ['mechos-power-control', '--sleep'],
+})
 
 STORE_ITEMS = [
     {
@@ -91,6 +103,8 @@ STORE_ITEMS = [
 STORE_BY_ID = {item['id']: item for item in STORE_ITEMS}
 DOWNLOADS: dict[str, dict] = {}
 DOWNLOAD_LOCK = threading.Lock()
+REMOTE_FRAME_LOCK = threading.Lock()
+LAST_FRAME_SIZE = [1920, 1080]
 
 
 def _catalog_item(item: dict) -> dict:
@@ -166,6 +180,227 @@ def _queue_install(item_id: str) -> dict:
     return result
 
 
+def _image_size(data: bytes) -> tuple[int, int]:
+    if data.startswith(b'\x89PNG\r\n\x1a\n') and len(data) >= 24:
+        return (
+            int.from_bytes(data[16:20], 'big'),
+            int.from_bytes(data[20:24], 'big'),
+        )
+    if data.startswith(b'\xff\xd8'):
+        i = 2
+        sof = {0xC0, 0xC1, 0xC2, 0xC3, 0xC5, 0xC6, 0xC7, 0xC9, 0xCA, 0xCB, 0xCD, 0xCE, 0xCF}
+        while i + 9 < len(data):
+            if data[i] != 0xFF:
+                i += 1
+                continue
+            while i < len(data) and data[i] == 0xFF:
+                i += 1
+            if i >= len(data):
+                break
+            marker = data[i]
+            i += 1
+            if marker in (0xD8, 0xD9):
+                continue
+            if i + 2 > len(data):
+                break
+            length = int.from_bytes(data[i:i + 2], 'big')
+            if length < 2 or i + length > len(data):
+                break
+            if marker in sof and length >= 7:
+                height = int.from_bytes(data[i + 3:i + 5], 'big')
+                width = int.from_bytes(data[i + 5:i + 7], 'big')
+                return width, height
+            i += length
+    return LAST_FRAME_SIZE[0], LAST_FRAME_SIZE[1]
+
+
+def _capture_command(path: str, quality: int) -> list[str] | None:
+    if shutil.which('grim'):
+        return ['grim', '-t', 'jpeg', '-q', str(quality), path]
+    if shutil.which('spectacle'):
+        return ['spectacle', '-b', '-n', '-o', path]
+    if shutil.which('gnome-screenshot'):
+        return ['gnome-screenshot', '-f', path]
+    if shutil.which('scrot'):
+        return ['scrot', path]
+    return None
+
+
+def _capture_frame(quality: int) -> dict:
+    quality = max(30, min(80, int(quality)))
+    with REMOTE_FRAME_LOCK:
+        jpeg = bool(shutil.which('grim'))
+        suffix = '.jpg' if jpeg else '.png'
+        temp = tempfile.NamedTemporaryFile(prefix='mechos-remote-', suffix=suffix, delete=False)
+        path = temp.name
+        temp.close()
+        try:
+            cmd = _capture_command(path, quality)
+            if cmd is None:
+                raise RuntimeError('Screen capture support missing. Install grim, Spectacle, gnome-screenshot, or scrot.')
+            p = subprocess.run(cmd, text=True, capture_output=True, timeout=10, check=False)
+            if p.returncode != 0:
+                message = (p.stderr or p.stdout or 'screen capture failed').strip()
+                raise RuntimeError(message[:300])
+            data = Path(path).read_bytes()
+            if not data:
+                raise RuntimeError('Screen capture returned an empty frame.')
+            if len(data) > 7 * 1024 * 1024:
+                raise RuntimeError('Screen frame is too large for remote streaming. Use grim/JPEG capture on this PC.')
+            width, height = _image_size(data)
+            LAST_FRAME_SIZE[0] = max(1, width)
+            LAST_FRAME_SIZE[1] = max(1, height)
+            return {
+                'image_base64': base64.b64encode(data).decode('ascii'),
+                'width': LAST_FRAME_SIZE[0],
+                'height': LAST_FRAME_SIZE[1],
+                'captured_at': datetime.now(timezone.utc).isoformat(),
+            }
+        finally:
+            try:
+                os.unlink(path)
+            except OSError:
+                pass
+
+
+def _normalized(value, name: str) -> float:
+    try:
+        number = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f'Invalid {name}') from exc
+    if not 0 <= number <= 1:
+        raise ValueError(f'{name} must be between 0 and 1')
+    return number
+
+
+def _run_input(cmd: list[str], *, text_input: str | None = None) -> str:
+    exe = shutil.which(cmd[0])
+    if not exe:
+        raise RuntimeError(f'Remote input support missing: {cmd[0]}')
+    p = subprocess.run(
+        [exe, *cmd[1:]],
+        input=text_input,
+        text=True,
+        capture_output=True,
+        timeout=6,
+        check=False,
+    )
+    if p.returncode != 0:
+        message = (p.stderr or p.stdout or f'{cmd[0]} failed').strip()
+        raise RuntimeError(message[:300])
+    return (p.stdout or '').strip()
+
+
+def _pointer_move(x: int, y: int) -> None:
+    if shutil.which('ydotool'):
+        _run_input(['ydotool', 'mousemove', '--absolute', str(x), str(y)])
+        return
+    if shutil.which('xdotool'):
+        _run_input(['xdotool', 'mousemove', str(x), str(y)])
+        return
+    raise RuntimeError('Remote input support missing. Install ydotool (Wayland) or xdotool (X11).')
+
+
+def _mouse_click(button: str) -> None:
+    if button not in ('left', 'right'):
+        raise ValueError('Unsupported mouse button')
+    if shutil.which('ydotool'):
+        _run_input(['ydotool', 'click', '0xC0' if button == 'left' else '0xC1'])
+        return
+    if shutil.which('xdotool'):
+        _run_input(['xdotool', 'click', '1' if button == 'left' else '3'])
+        return
+    raise RuntimeError('Remote input support missing. Install ydotool (Wayland) or xdotool (X11).')
+
+
+def _remote_key(name: str) -> None:
+    xkeys = {
+        'escape': 'Escape',
+        'enter': 'Return',
+        'tab': 'Tab',
+        'backspace': 'BackSpace',
+        'up': 'Up',
+        'down': 'Down',
+        'left': 'Left',
+        'right': 'Right',
+        'alt_tab': 'alt+Tab',
+    }
+    ykeys = {
+        'escape': ['1:1', '1:0'],
+        'enter': ['28:1', '28:0'],
+        'tab': ['15:1', '15:0'],
+        'backspace': ['14:1', '14:0'],
+        'up': ['103:1', '103:0'],
+        'down': ['108:1', '108:0'],
+        'left': ['105:1', '105:0'],
+        'right': ['106:1', '106:0'],
+        'alt_tab': ['56:1', '15:1', '15:0', '56:0'],
+    }
+    if name not in xkeys:
+        raise ValueError('Unsupported remote key')
+    if shutil.which('ydotool'):
+        _run_input(['ydotool', 'key', *ykeys[name]])
+        return
+    if shutil.which('xdotool'):
+        _run_input(['xdotool', 'key', xkeys[name]])
+        return
+    raise RuntimeError('Remote input support missing. Install ydotool (Wayland) or xdotool (X11).')
+
+
+def _remote_text(text: str) -> None:
+    if len(text) > 500:
+        raise ValueError('Remote text is limited to 500 characters')
+    if '\x00' in text:
+        raise ValueError('Invalid remote text')
+    if shutil.which('ydotool'):
+        _run_input(['ydotool', 'type', '--file', '-'], text_input=text)
+        return
+    if shutil.which('xdotool'):
+        _run_input(['xdotool', 'type', '--clearmodifiers', '--delay', '1', '--', text])
+        return
+    raise RuntimeError('Remote input support missing. Install ydotool (Wayland) or xdotool (X11).')
+
+
+def _remote_scroll(delta: int) -> None:
+    delta = max(-10, min(10, int(delta)))
+    if delta == 0:
+        return
+    if shutil.which('xdotool'):
+        button = '4' if delta > 0 else '5'
+        for _ in range(abs(delta)):
+            _run_input(['xdotool', 'click', button])
+        return
+    if shutil.which('ydotool'):
+        _run_input(['ydotool', 'mousemove', '--wheel', '--', '0', str(delta)])
+        return
+    raise RuntimeError('Remote input support missing. Install ydotool (Wayland) or xdotool (X11).')
+
+
+def _handle_remote_input(data: dict) -> None:
+    kind = str(data.get('type', ''))
+    if kind == 'tap':
+        x = _normalized(data.get('x'), 'x')
+        y = _normalized(data.get('y'), 'y')
+        px = round(x * max(0, LAST_FRAME_SIZE[0] - 1))
+        py = round(y * max(0, LAST_FRAME_SIZE[1] - 1))
+        _pointer_move(px, py)
+        _mouse_click('left')
+        return
+    if kind == 'click':
+        _mouse_click(str(data.get('key', 'left')))
+        return
+    if kind == 'scroll':
+        _remote_scroll(int(float(data.get('delta', 0))))
+        return
+    if kind == 'key':
+        _remote_key(str(data.get('key', '')))
+        return
+    if kind == 'text':
+        _remote_text(str(data.get('text', '')))
+        return
+    raise ValueError('Unsupported remote input type')
+
+
 def _remote_device_url() -> str | None:
     relay = os.environ.get('MECHOS_RELAY_PUBLIC_URL') or os.environ.get('MECHOS_RELAY_URL')
     device_id = os.environ.get('MECHOS_RELAY_DEVICE_ID')
@@ -176,18 +411,26 @@ def _remote_device_url() -> str | None:
 
 
 class Handler(legacy.Handler):
-    server_version = 'MechOSBridge/0.2.0'
+    server_version = 'MechOSBridge/0.2.1'
 
     def do_GET(self):
-        path = urllib.parse.urlsplit(self.path).path
+        parsed = urllib.parse.urlsplit(self.path)
+        path = parsed.path
         if path == '/v1/health':
             return self._json(200, {'ok': True, 'version': VERSION})
-        if path in ('/v1/store/catalog', '/v1/store/downloads'):
+        if path in ('/v1/store/catalog', '/v1/store/downloads', '/v1/remote/frame'):
             if not self._authorized():
                 return self._json(401, {'error': 'Not paired'})
             if path == '/v1/store/catalog':
                 return self._json(200, {'items': [_catalog_item(item) for item in STORE_ITEMS]})
-            return self._json(200, {'downloads': _downloads()})
+            if path == '/v1/store/downloads':
+                return self._json(200, {'downloads': _downloads()})
+            try:
+                query = urllib.parse.parse_qs(parsed.query)
+                quality = int(query.get('quality', ['55'])[0])
+                return self._json(200, _capture_frame(quality))
+            except Exception as exc:
+                return self._json(503, {'error': str(exc)})
         return super().do_GET()
 
     def do_POST(self):
@@ -215,17 +458,22 @@ class Handler(legacy.Handler):
                 payload['remote_url'] = remote_url
             return self._json(200, payload)
 
-        if path == '/v1/store/install':
+        if path in ('/v1/store/install', '/v1/remote/input'):
             if not self._authorized():
                 return self._json(401, {'error': 'Not paired'})
             try:
                 data = self._body()
-                task = _queue_install(str(data.get('item_id', '')))
+                if path == '/v1/store/install':
+                    task = _queue_install(str(data.get('item_id', '')))
+                    return self._json(202, {'download': task})
+                _handle_remote_input(data)
+                return self._json(200, {'ok': True})
             except KeyError:
                 return self._json(404, {'error': 'Store item not found'})
-            except Exception as exc:
+            except ValueError as exc:
                 return self._json(400, {'error': str(exc)})
-            return self._json(202, {'download': task})
+            except Exception as exc:
+                return self._json(503, {'error': str(exc)})
 
         return super().do_POST()
 
@@ -345,6 +593,8 @@ def main():
     print(f'MechOS Companion Bridge {VERSION}')
     print(f'Pairing code: {legacy.PAIR_CODE}')
     print(f'Listening on http://{args.bind}:{args.port}')
+    print('Remote Control capture:', 'available' if any(shutil.which(x) for x in ('grim', 'spectacle', 'gnome-screenshot', 'scrot')) else 'missing capture tool')
+    print('Remote Control input:', 'available' if any(shutil.which(x) for x in ('ydotool', 'xdotool')) else 'missing input tool')
     remote_url = _remote_device_url()
     if remote_url:
         print(f'MechOS Anywhere URL: {remote_url}')

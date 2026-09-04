@@ -3,6 +3,7 @@ import '../app_state.dart';
 import '../theme.dart';
 import 'controls_screen.dart';
 import 'optimization_report_screen.dart';
+import 'remote_control_screen.dart';
 
 class ToolsScreen extends StatelessWidget {
   const ToolsScreen({super.key, required this.state});
@@ -14,8 +15,16 @@ class ToolsScreen extends StatelessWidget {
         children: [
           const Text('Tools', style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900)),
           const SizedBox(height: 4),
-          const Text('Tune, optimize, and control your MechOS PC from one place.', style: TextStyle(color: MechTheme.subtle)),
+          const Text('Tune, optimize, stream, and control your MechOS PC from one place.', style: TextStyle(color: MechTheme.subtle)),
           const SizedBox(height: 18),
+          _tool(
+            context,
+            icon: Icons.cast_connected_rounded,
+            title: 'Remote Control',
+            detail: 'Stream your PC screen to the phone and control it with touch, mouse, and keyboard actions.',
+            onTap: () => _open(context, 'Remote Control', RemoteControlScreen(state: state)),
+          ),
+          const SizedBox(height: 12),
           _tool(
             context,
             icon: Icons.speed_rounded,
@@ -28,7 +37,7 @@ class ToolsScreen extends StatelessWidget {
             context,
             icon: Icons.tune_rounded,
             title: 'System Controls',
-            detail: 'Switch sessions, check updates, run RadarAI, restart, or shut down.',
+            detail: 'Switch sessions, check updates, run RadarAI, lock, sleep, restart, or shut down.',
             onTap: () => _open(context, 'System Controls', ControlsScreen(state: state)),
           ),
           const SizedBox(height: 12),

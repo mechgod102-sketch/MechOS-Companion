@@ -32,6 +32,19 @@ fi
 systemctl --user daemon-reload
 systemctl --user enable --now mechos-companion-bridge.service
 
-echo "MechOS Companion Bridge 0.2.0 installed for the current user."
+echo "MechOS Companion Bridge 0.2.1 installed for the current user."
 echo "View the pairing code with: journalctl --user -u mechos-companion-bridge -n 30"
 echo "Optional remote access config: ~/.config/mechos-companion-bridge/relay.env"
+
+echo
+if command -v grim >/dev/null 2>&1 || command -v spectacle >/dev/null 2>&1 || command -v gnome-screenshot >/dev/null 2>&1 || command -v scrot >/dev/null 2>&1; then
+  echo "Remote Control screen capture: ready"
+else
+  echo "Remote Control screen capture: missing (MechOS image should provide grim or the desktop screenshot utility)"
+fi
+
+if command -v ydotool >/dev/null 2>&1 || command -v xdotool >/dev/null 2>&1; then
+  echo "Remote Control input: ready"
+else
+  echo "Remote Control input: missing (MechOS image should provide ydotool for Wayland or xdotool for X11)"
+fi

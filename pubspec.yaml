@@ -1,7 +1,7 @@
 name: mechos_companion_mobile
 description: MechOS Companion Mobile for Android and iPhone.
 publish_to: "none"
-version: 0.2.0+3
+version: 0.2.1+4
 
 environment:
   sdk: ">=3.9.0 <4.0.0"
@@ -17,6 +17,16 @@ dependencies:
   cross_file: ^0.3.4+2
   gal: ^2.3.2
   multicast_dns: ^0.3.3
+  flutter_local_notifications: ^20.1.0
+  workmanager: 0.9.0+3
+
+dependency_overrides:
+  # Keep the federated Workmanager packages on the set published together
+  # with workmanager 0.9.0+3. Newer Apple builds use iOS SDK APIs that are
+  # not available on the current stable GitHub/Xcode runner.
+  workmanager_android: 0.9.0+2
+  workmanager_apple: 0.9.1+2
+  workmanager_platform_interface: 0.9.1+1
 
 dev_dependencies:
   flutter_test:

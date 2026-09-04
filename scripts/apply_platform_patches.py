@@ -2,6 +2,7 @@
 """Apply MechOS-specific Android/iOS permissions and application identity."""
 from pathlib import Path
 import re
+import shutil
 import xml.etree.ElementTree as ET
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -22,6 +23,7 @@ def android():
         'android.permission.ACCESS_NETWORK_STATE',
         'android.permission.ACCESS_WIFI_STATE',
         'android.permission.CHANGE_WIFI_MULTICAST_STATE',
+        'android.permission.POST_NOTIFICATIONS',
     ]
     for permission in required:
         if permission not in permissions:
@@ -42,11 +44,38 @@ def android():
     app.set(f'{{{ANDROID_NS}}}requestLegacyExternalStorage', 'true')
     tree.write(manifest, encoding='utf-8', xml_declaration=True)
 
+    notification_icon = ROOT / 'platform_patches/android/ic_notification.xml'
+    drawable = ROOT / 'android/app/src/main/res/drawable/ic_notification.xml'
+    drawable.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(notification_icon, drawable)
+
     gradle = ROOT / 'android/app/build.gradle.kts'
     text = gradle.read_text()
     text = re.sub(r'namespace\s*=\s*"[^"]+"', 'namespace = "com.mechos.companion"', text)
     text = re.sub(r'applicationId\s*=\s*"[^"]+"', 'applicationId = "com.mechos.companion"', text)
     text = re.sub(r'compileSdk\s*=\s*[^\n]+', 'compileSdk = 36', text)
+
+    # flutter_local_notifications requires core-library desugaring even when
+    # scheduled notifications are not used. Patch the generated Kotlin Gradle
+    # file so local development and CI builds get the same requirement.
+    if 'isCoreLibraryDesugaringEnabled = true' not in text:
+        text, count = re.subn(
+            r'(compileOptions\s*\{\s*\n)',
+            r'\1        isCoreLibraryDesugaringEnabled = true\n',
+            text,
+            count=1,
+        )
+        if count == 0:
+            raise SystemExit('Android compileOptions block missing; cannot enable desugaring.')
+
+    desugar_dependency = 'coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")'
+    if desugar_dependency not in text:
+        text = text.rstrip() + (
+            '\n\ndependencies {\n'
+            '    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")\n'
+            '}\n'
+        )
+
     gradle.write_text(text)
 
 
@@ -74,6 +103,14 @@ def ios():
             '\t</array>\n'
         )
 
+    if '<key>UIBackgroundModes</key>' not in text:
+        additions.append(
+            '\t<key>UIBackgroundModes</key>\n'
+            '\t<array>\n'
+            '\t\t<string>fetch</string>\n'
+            '\t</array>\n'
+        )
+
     if '<key>NSAppTransportSecurity</key>' not in text:
         additions.append(
             '\t<key>NSAppTransportSecurity</key>\n'
@@ -96,6 +133,7 @@ def ios():
         return f'PRODUCT_BUNDLE_IDENTIFIER = com.mechos.companion{suffix};'
 
     project = re.sub(r'PRODUCT_BUNDLE_IDENTIFIER = ([^;]+);', bundle, project)
+    project = re.sub(r'IPHONEOS_DEPLOYMENT_TARGET = [^;]+;', 'IPHONEOS_DEPLOYMENT_TARGET = 14.0;', project)
     pbx.write_text(project)
 
 

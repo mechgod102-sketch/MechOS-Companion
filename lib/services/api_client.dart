@@ -4,6 +4,7 @@ import '../models/device_status.dart';
 import '../models/download_task.dart';
 import '../models/optimization_report.dart';
 import '../models/radar_alert.dart';
+import '../models/remote_frame.dart';
 import '../models/store_item.dart';
 
 class PairResult {
@@ -105,6 +106,42 @@ class MechApiClient {
         .timeout(const Duration(seconds: 15));
     final body = _decode(response);
     return DownloadTask.fromJson(body['download'] as Map<String, dynamic>);
+  }
+
+  Future<RemoteFrame> remoteFrame({int quality = 55}) async {
+    final q = quality.clamp(30, 80);
+    final response = await _http
+        .get(
+          Uri.parse('$baseUrl/v1/remote/frame?quality=$q'),
+          headers: _headers,
+        )
+        .timeout(const Duration(seconds: 12));
+    return RemoteFrame.fromJson(_decode(response));
+  }
+
+  Future<void> remoteInput(
+    String type, {
+    double? x,
+    double? y,
+    double? delta,
+    String? key,
+    String? text,
+  }) async {
+    final payload = <String, dynamic>{'type': type};
+    if (x != null) payload['x'] = x.clamp(0, 1);
+    if (y != null) payload['y'] = y.clamp(0, 1);
+    if (delta != null) payload['delta'] = delta.clamp(-10, 10);
+    if (key != null) payload['key'] = key;
+    if (text != null) payload['text'] = text;
+
+    final response = await _http
+        .post(
+          Uri.parse('$baseUrl/v1/remote/input'),
+          headers: _headers,
+          body: jsonEncode(payload),
+        )
+        .timeout(const Duration(seconds: 8));
+    _decode(response);
   }
 
   Future<String> action(String action, {String? value}) async {
