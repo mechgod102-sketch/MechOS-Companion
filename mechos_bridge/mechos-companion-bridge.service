@@ -1,10 +1,12 @@
 [Unit]
 Description=MechOS Companion Bridge
-After=network.target
+After=network-online.target
+Wants=network-online.target
 
 [Service]
 Type=simple
-ExecStart=/usr/bin/python3 /usr/lib/mechos-companion-bridge/server.py
+EnvironmentFile=-%h/.config/mechos-companion-bridge/relay.env
+ExecStart=/usr/bin/python3 /usr/lib/mechos-companion-bridge/server_v020.py
 Restart=on-failure
 RestartSec=3
 
