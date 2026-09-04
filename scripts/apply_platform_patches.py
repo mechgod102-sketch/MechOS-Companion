@@ -16,18 +16,28 @@ def android():
     tree = ET.parse(manifest)
     root = tree.getroot()
     permissions = {p.get(f'{{{ANDROID_NS}}}name') for p in root.findall('uses-permission')}
-    if 'android.permission.INTERNET' not in permissions:
-        ET.SubElement(root, 'uses-permission', {f'{{{ANDROID_NS}}}name': 'android.permission.INTERNET'})
+
+    required = [
+        'android.permission.INTERNET',
+        'android.permission.ACCESS_NETWORK_STATE',
+        'android.permission.ACCESS_WIFI_STATE',
+        'android.permission.CHANGE_WIFI_MULTICAST_STATE',
+    ]
+    for permission in required:
+        if permission not in permissions:
+            ET.SubElement(root, 'uses-permission', {f'{{{ANDROID_NS}}}name': permission})
+
     if 'android.permission.WRITE_EXTERNAL_STORAGE' not in permissions:
         ET.SubElement(root, 'uses-permission', {
             f'{{{ANDROID_NS}}}name': 'android.permission.WRITE_EXTERNAL_STORAGE',
             f'{{{ANDROID_NS}}}maxSdkVersion': '29',
         })
+
     app = root.find('application')
     if app is None:
         raise SystemExit('Android application element missing.')
     app.set(f'{{{ANDROID_NS}}}label', 'MechOS Companion')
-    # v0.1.1 pairs over authenticated LAN HTTP. Remove this when the bridge moves to TLS.
+    # Local pairing still uses authenticated LAN HTTP. Remote/relay routes should use HTTPS.
     app.set(f'{{{ANDROID_NS}}}usesCleartextTraffic', 'true')
     app.set(f'{{{ANDROID_NS}}}requestLegacyExternalStorage', 'true')
     tree.write(manifest, encoding='utf-8', xml_declaration=True)
@@ -47,7 +57,7 @@ def ios():
     text = plist.read_text()
     additions = []
     values = {
-        'NSLocalNetworkUsageDescription': 'MechOS Companion connects to your paired MechOS computer on your local network.',
+        'NSLocalNetworkUsageDescription': 'MechOS Companion discovers and connects to your paired MechOS computer on your local network.',
         'NSPhotoLibraryAddUsageDescription': 'MechOS Companion saves optimization report images to your photo library.',
         'NSPhotoLibraryUsageDescription': 'MechOS Companion saves optimization report images to the MechOS Reports album.',
         'CFBundleDisplayName': 'MechOS Companion',
@@ -55,18 +65,36 @@ def ios():
     for key, value in values.items():
         if f'<key>{key}</key>' not in text:
             additions.append(f'\t<key>{key}</key>\n\t<string>{value}</string>\n')
+
+    if '<key>NSBonjourServices</key>' not in text:
+        additions.append(
+            '\t<key>NSBonjourServices</key>\n'
+            '\t<array>\n'
+            '\t\t<string>_mechos-companion._tcp</string>\n'
+            '\t</array>\n'
+        )
+
     if '<key>NSAppTransportSecurity</key>' not in text:
-        additions.append('\t<key>NSAppTransportSecurity</key>\n\t<dict>\n\t\t<key>NSAllowsLocalNetworking</key>\n\t\t<true/>\n\t</dict>\n')
+        additions.append(
+            '\t<key>NSAppTransportSecurity</key>\n'
+            '\t<dict>\n'
+            '\t\t<key>NSAllowsLocalNetworking</key>\n'
+            '\t\t<true/>\n'
+            '\t</dict>\n'
+        )
+
     if additions:
         text = text.replace('</dict>\n</plist>', ''.join(additions) + '</dict>\n</plist>')
         plist.write_text(text)
 
     pbx = ROOT / 'ios/Runner.xcodeproj/project.pbxproj'
     project = pbx.read_text()
+
     def bundle(match):
         current = match.group(1)
         suffix = '.RunnerTests' if 'RunnerTests' in current else ''
         return f'PRODUCT_BUNDLE_IDENTIFIER = com.mechos.companion{suffix};'
+
     project = re.sub(r'PRODUCT_BUNDLE_IDENTIFIER = ([^;]+);', bundle, project)
     pbx.write_text(project)
 

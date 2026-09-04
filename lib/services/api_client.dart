@@ -1,13 +1,21 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../models/device_status.dart';
-import '../models/radar_alert.dart';
+import '../models/download_task.dart';
 import '../models/optimization_report.dart';
+import '../models/radar_alert.dart';
+import '../models/store_item.dart';
 
 class PairResult {
-  const PairResult({required this.token, required this.deviceName});
+  const PairResult({
+    required this.token,
+    required this.deviceName,
+    this.remoteUrl,
+  });
+
   final String token;
   final String deviceName;
+  final String? remoteUrl;
 }
 
 class MechApiClient {
@@ -36,6 +44,7 @@ class MechApiClient {
     return PairResult(
       token: body['token'] as String,
       deviceName: body['mechos_name'] as String? ?? 'MechOS',
+      remoteUrl: body['remote_url'] as String?,
     );
   }
 
@@ -52,14 +61,50 @@ class MechApiClient {
         .timeout(const Duration(seconds: 8));
     final body = _decode(response);
     final items = body['alerts'] as List<dynamic>? ?? const [];
-    return items.map((e) => RadarAlert.fromJson(e as Map<String, dynamic>)).toList();
+    return items
+        .map((e) => RadarAlert.fromJson(e as Map<String, dynamic>))
+        .toList();
   }
 
   Future<OptimizationReport> optimizationReport() async {
     final response = await _http
         .get(Uri.parse('$baseUrl/v1/optimization/report'), headers: _headers)
-        .timeout(const Duration(seconds: 15));
+        .timeout(const Duration(seconds: 20));
     return OptimizationReport.fromJson(_decode(response));
+  }
+
+  Future<List<StoreItem>> storeCatalog() async {
+    final response = await _http
+        .get(Uri.parse('$baseUrl/v1/store/catalog'), headers: _headers)
+        .timeout(const Duration(seconds: 10));
+    final body = _decode(response);
+    final items = body['items'] as List<dynamic>? ?? const [];
+    return items
+        .map((e) => StoreItem.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<List<DownloadTask>> downloads() async {
+    final response = await _http
+        .get(Uri.parse('$baseUrl/v1/store/downloads'), headers: _headers)
+        .timeout(const Duration(seconds: 10));
+    final body = _decode(response);
+    final items = body['downloads'] as List<dynamic>? ?? const [];
+    return items
+        .map((e) => DownloadTask.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<DownloadTask> installStoreItem(String itemId) async {
+    final response = await _http
+        .post(
+          Uri.parse('$baseUrl/v1/store/install'),
+          headers: _headers,
+          body: jsonEncode({'item_id': itemId}),
+        )
+        .timeout(const Duration(seconds: 15));
+    final body = _decode(response);
+    return DownloadTask.fromJson(body['download'] as Map<String, dynamic>);
   }
 
   Future<String> action(String action, {String? value}) async {
