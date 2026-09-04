@@ -3,8 +3,10 @@ import 'models/device_status.dart';
 import 'models/download_task.dart';
 import 'models/optimization_report.dart';
 import 'models/radar_alert.dart';
+import 'models/remote_frame.dart';
 import 'models/store_item.dart';
 import 'services/api_client.dart';
+import 'services/notification_service.dart';
 import 'services/secure_store.dart';
 
 class AppState extends ChangeNotifier {
@@ -96,6 +98,13 @@ class AppState extends ChangeNotifier {
     try {
       status = await _withClient((client) => client.status());
       alerts = await _withClient((client) => client.alerts());
+      await NotificationService.notifyRadarAlerts(alerts);
+      await NotificationService.notifyUpdateState(
+        available: status.updateAvailable,
+        detail: status.updateAvailable
+            ? '${connection?.deviceName ?? 'Your PC'} has a MechOS update ready to install.'
+            : null,
+      );
       error = null;
     } catch (e) {
       connectionMode = 'Offline';
@@ -153,6 +162,34 @@ class AppState extends ChangeNotifier {
     return task;
   }
 
+  Future<RemoteFrame> fetchRemoteFrame({int quality = 55}) async {
+    if (demoMode) throw Exception('Remote Control is unavailable in Demo Mode');
+    if (connection == null) throw Exception('No paired MechOS device');
+    return _withClient((client) => client.remoteFrame(quality: quality));
+  }
+
+  Future<void> sendRemoteInput(
+    String type, {
+    double? x,
+    double? y,
+    double? delta,
+    String? key,
+    String? text,
+  }) async {
+    if (demoMode) return;
+    if (connection == null) throw Exception('No paired MechOS device');
+    await _withClient(
+      (client) => client.remoteInput(
+        type,
+        x: x,
+        y: y,
+        delta: delta,
+        key: key,
+        text: text,
+      ),
+    );
+  }
+
   Future<OptimizationReport> scanOptimization() async {
     if (demoMode) {
       optimizationReport = OptimizationReport.demo;
@@ -179,8 +216,22 @@ class AppState extends ChangeNotifier {
     final result = await _withClient(
       (client) => client.action(action, value: value),
     );
+    if (action == 'update_install') {
+      await NotificationService.showUpdateStarted();
+    }
     await refresh();
     return result;
+  }
+
+  Future<void> handleNotificationAction(String action) async {
+    if (action == NotificationService.updateAction) {
+      try {
+        await runAction('update_install');
+      } catch (e) {
+        error = _cleanError(e);
+        notifyListeners();
+      }
+    }
   }
 
   Future<void> setRemoteAccess({
