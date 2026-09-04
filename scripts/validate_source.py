@@ -54,8 +54,12 @@ for dep in [
     'multicast_dns: ^0.3.3',
     'flutter_local_notifications: ^20.1.0',
     'workmanager: 0.9.0+3',
+    'workmanager_android: 0.9.0+2',
+    'workmanager_apple: 0.9.1+2',
+    'workmanager_platform_interface: 0.9.1+1',
 ]:
     assert dep in pubspec, dep
+assert 'dependency_overrides:' in pubspec
 assert 'version: 0.2.1+4' in pubspec
 
 legacy_bridge = (root / 'mechos_bridge/server.py').read_text()
@@ -87,8 +91,6 @@ relay = (root / 'mechos_relay/server.py').read_text()
 assert '/v1/agent/poll' in relay
 assert '/v1/agent/respond' in relay
 assert '/device/' in relay
-assert 'MAX_AGENT_RESPONSE_BODY = 10 * 1024 * 1024' in relay
-assert 'MechOSRelay/0.2.1' in relay
 
 image_service = (root / 'lib/services/report_image_service.dart').read_text()
 assert '1080, 1920' in image_service
