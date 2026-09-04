@@ -54,6 +54,28 @@ def android():
     text = re.sub(r'namespace\s*=\s*"[^"]+"', 'namespace = "com.mechos.companion"', text)
     text = re.sub(r'applicationId\s*=\s*"[^"]+"', 'applicationId = "com.mechos.companion"', text)
     text = re.sub(r'compileSdk\s*=\s*[^\n]+', 'compileSdk = 36', text)
+
+    # flutter_local_notifications requires core-library desugaring even when
+    # scheduled notifications are not used. Patch the generated Kotlin Gradle
+    # file so local development and CI builds get the same requirement.
+    if 'isCoreLibraryDesugaringEnabled = true' not in text:
+        text, count = re.subn(
+            r'(compileOptions\s*\{\s*\n)',
+            r'\1        isCoreLibraryDesugaringEnabled = true\n',
+            text,
+            count=1,
+        )
+        if count == 0:
+            raise SystemExit('Android compileOptions block missing; cannot enable desugaring.')
+
+    desugar_dependency = 'coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")'
+    if desugar_dependency not in text:
+        text = text.rstrip() + (
+            '\n\ndependencies {\n'
+            '    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")\n'
+            '}\n'
+        )
+
     gradle.write_text(text)
 
 
