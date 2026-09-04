@@ -79,8 +79,8 @@ class _RemoteControlScreenState extends State<RemoteControlScreen> {
       renderWidth = renderHeight * frameAspect;
       offsetX = (boxSize.width - renderWidth) / 2;
     }
-    final x = ((local.dx - offsetX) / renderWidth).clamp(0.0, 1.0);
-    final y = ((local.dy - offsetY) / renderHeight).clamp(0.0, 1.0);
+    final x = ((local.dx - offsetX) / renderWidth).clamp(0.0, 1.0).toDouble();
+    final y = ((local.dy - offsetY) / renderHeight).clamp(0.0, 1.0).toDouble();
     await _send('tap', x: x, y: y);
   }
 
@@ -113,7 +113,7 @@ class _RemoteControlScreenState extends State<RemoteControlScreen> {
   Widget build(BuildContext context) {
     final frame = _frame;
     final aspect = frame != null && frame.height > 0
-        ? math.max(1.0, frame.width / frame.height)
+        ? math.max(1.0, frame.width / frame.height).toDouble()
         : 16 / 9;
     return ListView(
       padding: const EdgeInsets.all(16),
