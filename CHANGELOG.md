@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.2.0
+
+- Added automatic MechOS PC discovery over mDNS/Bonjour.
+- Added upgraded cyber-style dark UI with new Home/Store/Tools/RadarAI/Settings navigation.
+- Added MechOS Anywhere local-first connection fallback with an optional HTTPS relay route for cellular access.
+- Added persistent remote relay configuration in secure app settings.
+- Added Unified Store and Creator Store browsing from the companion app.
+- Added remote install queue and download status tracking on the paired MechOS PC.
+- Added bridge-side allowlisted store installs using `mechos-store-cli` when available, with Flatpak fallback for approved catalog entries.
+- Added reference MechOS Anywhere relay service and outbound PC relay agent so the PC does not require router port forwarding.
+- Added Avahi service advertisement for `_mechos-companion._tcp`.
+- Added Android multicast/network permissions and iOS Bonjour service declarations.
+- Bumped mobile build version to `0.2.0+3`.
+
 ## 0.1.1
 
 - Added Optimize navigation tab.
