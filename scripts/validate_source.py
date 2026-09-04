@@ -87,6 +87,8 @@ relay = (root / 'mechos_relay/server.py').read_text()
 assert '/v1/agent/poll' in relay
 assert '/v1/agent/respond' in relay
 assert '/device/' in relay
+assert 'MAX_AGENT_RESPONSE_BODY = 10 * 1024 * 1024' in relay
+assert 'MechOSRelay/0.2.1' in relay
 
 image_service = (root / 'lib/services/report_image_service.dart').read_text()
 assert '1080, 1920' in image_service
